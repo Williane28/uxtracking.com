@@ -251,7 +251,7 @@ function graph_recording(full_ims, type_icon, df_trace) {
                             hovertemplate: `Interaction: ${type}<br>Site: ${site}<br>%{text}<br>X: %{x}<br>Y: %{y}</br>`,
                             marker: {
                                 symbol: type_icon[type],
-                                size: type !== 'click' ? 10 : 35,
+                                size: type !== 'click' ? 15 : 30,
                                 angleref: 'previous'
                             }
                         });
@@ -295,16 +295,19 @@ function graph_recording(full_ims, type_icon, df_trace) {
                         opacity: 1,
                         layer: 'below'
                     }],
-                    width: width * 0.6,
-                    height: height * 0.6,
+                    width: width,
+                    height: height,
                     margin: { l: 0, r: 0, t: 0, b: 0 },
                     paper_bgcolor: 'rgba(0, 0, 0, 0)',
                     plot_bgcolor: 'rgba(0, 0, 0, 0)'
                 };
 
                 // Cria um elemento div e plota o gráfico
-                const plotDiv = document.createElement('div');
+                const plotDiv = document.getElementById('resultPlot');
                 Plotly.newPlot(plotDiv, traces, layout, { displayModeBar: false });
+                const containerWidth = plotDiv.clientWidth;
+                const containerHeight = plotDiv.clientHeight;
+                Plotly.relayout(plotDiv, {height: containerHeight, width: containerWidth});
                 dict_site[site] = plotDiv.outerHTML; // Armazena o HTML do gráfico no objeto dict_site
                 resolve(); // Resolve a promessa para este site
             };
