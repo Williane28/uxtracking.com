@@ -232,9 +232,15 @@ function graph_recording(full_ims, type_icon, df_trace) {
                     const group = groupedData[type];
                     if (type_icon[type]) {
                         const x = group.map(item => item.x);
-                        const y = group.map(item => item.y + item.scroll);
+                        const y = group.map(item => type === 'eye' ? item.y + item.scroll : item.y); // Ajuste condicional de Y
                         const time = group.map(item => item.time);
-                        const mode = type !== 'click' ? 'lines+markers' : 'markers'; // Define o modo do trace
+                        let mode;
+                        if (type === 'click' || type === 'freeze' || type === 'wheel') {
+                            mode = 'markers';
+                        }
+                        else {
+                            mode = 'lines+markers';
+                        }
                         const text = time.map(t => {
                             const hours = String(Math.floor(t / 3600)).padStart(2, '0');
                             const minutes = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
@@ -251,7 +257,7 @@ function graph_recording(full_ims, type_icon, df_trace) {
                             hovertemplate: `Interaction: ${type}<br>Site: ${site}<br>%{text}<br>X: %{x}<br>Y: %{y}</br>`,
                             marker: {
                                 symbol: type_icon[type],
-                                size: type !== 'click' ? 15 : 30,
+                                size: (type !== 'click' && type !== 'freeze' && type !== 'wheel') ? 20 : 40,
                                 angleref: 'previous'
                             }
                         });
@@ -278,7 +284,7 @@ function graph_recording(full_ims, type_icon, df_trace) {
                     legend: {
                         orientation: 'h',
                         yanchor: 'bottom',
-                        y: 1.02,
+                        y: 1,
                         xanchor: 'left',
                         x: 0,
                         font: { color: 'white', size: 18 }
@@ -304,10 +310,9 @@ function graph_recording(full_ims, type_icon, df_trace) {
 
                 // Cria um elemento div e plota o gráfico
                 const plotDiv = document.getElementById('resultPlot');
-                Plotly.newPlot(plotDiv, traces, layout, { displayModeBar: false });
+                Plotly.newPlot(plotDiv, traces, layout);
                 const containerWidth = plotDiv.clientWidth;
-                const containerHeight = plotDiv.clientHeight;
-                Plotly.relayout(plotDiv, {height: containerHeight, width: containerWidth});
+                Plotly.relayout(plotDiv, {height: height*0.88, width: containerWidth*0.88});
                 dict_site[site] = plotDiv.outerHTML; // Armazena o HTML do gráfico no objeto dict_site
                 resolve(); // Resolve a promessa para este site
             };
@@ -323,39 +328,38 @@ function graph_recording(full_ims, type_icon, df_trace) {
 }
 
 
-function gaussianFilter(matrix, sigma) {
-    const kernelSize = Math.ceil(6 * sigma) + 1;
-    const kernel = new Array(kernelSize).fill().map((_, i) => {
-        const x = i - Math.floor(kernelSize / 2);
-        return Math.exp(-0.5 * (x / sigma) ** 2) / (sigma * Math.sqrt(2 * Math.PI));
-    });
-    const sum = kernel.reduce((acc, val) => acc + val, 0);
-    const normalizedKernel = kernel.map(val => val / sum);
+function gaussianKernel(x, y, sigma) {
+    const kernel = [];
+    const size = Math.ceil(6 * sigma);
+    const halfSize = Math.floor(size / 2);
 
-    const convolve = (data) => {
-        const result = new Array(data.length).fill(0);
-        const half = Math.floor(normalizedKernel.length / 2);
-
-        for (let i = 0; i < data.length; i++) {
-            let sum = 0;
-            for (let j = -half; j <= half; j++) {
-                const index = i + j;
-                if (index >= 0 && index < data.length) {
-                    sum += data[index] * normalizedKernel[j + half];
-                }
-            }
-            result[i] = sum;
+    for (let i = -halfSize; i <= halfSize; i++) {
+        kernel[i + halfSize] = [];
+        for (let j = -halfSize; j <= halfSize; j++) {
+            kernel[i + halfSize][j + halfSize] = Math.exp(-0.5 * (i**2 + j**2) / (sigma**2));
         }
-        return result;
-    };
+    }
 
-    const result = matrix.map(row => convolve(row));
-    const transposed = result[0].map((_, colIndex) => result.map(row => row[colIndex]));
-    return transposed.map(row => convolve(row));
+    const sum = kernel.flat().reduce((acc, val) => acc + val, 0);
+    return kernel.map(row => row.map(val => val / sum));
 }
 
+function applyGaussianKernelToMatrix(matrix, kernel, x, y) {
+    const size = kernel.length;
+    const halfSize = Math.floor(size / 2);
 
-async function graph_heatmap(images, df_trace, df_voice) {
+    for (let i = -halfSize; i <= halfSize; i++) {
+        for (let j = -halfSize; j <= halfSize; j++) {
+            const xi = x + i;
+            const yj = y + j;
+            if (xi >= 0 && xi < matrix.length && yj >= 0 && yj < matrix[0].length) {
+                matrix[xi][yj] += kernel[i + halfSize][j + halfSize];
+            }
+        }
+    }
+}
+
+async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
     const firstImageKey = Object.keys(images)[0];
     const firstImageBase64 = images[firstImageKey];
 
@@ -369,6 +373,7 @@ async function graph_heatmap(images, df_trace, df_voice) {
 
     const width = img.width;
     const height = img.height;
+    console.log(width, height);
 
     const frames = [];
     const colorscale = [
@@ -389,37 +394,23 @@ async function graph_heatmap(images, df_trace, df_voice) {
         for (const image of uniqueImages) {
             const plot_df = filtered_df.filter(row => row.image == image);
 
-            const x = plot_df.map(row => {
-                const value = parseFloat(row.x);
-                return isNaN(value) || value < 0 ? 0 : value;
-            });
+            const densityMatrix = new Array(width).fill().map(() => new Array(height).fill(0));
+            const kernel = gaussianKernel(0, 0, sigma);
 
-            const y = plot_df.map(row => {
-                const value = Math.abs(parseFloat(row.y) - parseFloat(row.scroll));
-                return isNaN(value) || value < 0 ? 0 : value;
-            });
+            for (const point of plot_df) {
+                const x = Math.floor(parseFloat(point.x));
+                const y = Math.floor(Math.abs(parseFloat(point.y) - parseFloat(point.scroll)));
 
-            const histogram = new Array(250).fill().map(() => new Array(250).fill(0));
-            for (let i = 0; i < x.length; i++) {
-                try {
-                    const xBin = Math.floor((x[i] / width) * 250);
-                    const yBin = Math.floor((y[i] / height) * 250);
-                    histogram[xBin][yBin]++; 
-                } catch (error) {
-                    console.error("Erro ao criar o histograma:", error);
-                    continue;
+                if (!isNaN(x) && !isNaN(y)) {
+                    applyGaussianKernelToMatrix(densityMatrix, kernel, x, y);
                 }
             }
-
-            console.log(histogram);
-
-            const dataSmoothed = gaussianFilter(histogram, 24);
 
             if (df_voice.some(row => row.time == time)) {
                 const audio2text = df_voice.find(row => row.time == time).text;
                 frames.push({
                     data: [{
-                        z: dataSmoothed,
+                        z: densityMatrix,
                         type: 'heatmap',
                         colorscale: colorscale,
                         showscale: false,
@@ -461,7 +452,7 @@ async function graph_heatmap(images, df_trace, df_voice) {
             } else {
                 frames.push({
                     data: [{
-                        z: dataSmoothed,
+                        z: densityMatrix,
                         type: 'heatmap',
                         colorscale: colorscale,
                         showscale: false,
@@ -488,15 +479,26 @@ async function graph_heatmap(images, df_trace, df_voice) {
     }
 
     const layout = {
+        autosize: true,  // Permite que o gráfico se ajuste automaticamente ao contêiner
+        margin: {  // Remover margens para permitir que a imagem se expanda completamente
+            l: 0,
+            r: 0,
+            t: 40,
+            b: 0,
+            pad: 0
+        },
         xaxis: {
-            range: [0, width], autorange: false,
+            range: [0, width], 
+            autorange: false,
             showgrid: false,
             zeroline: false,
             visible: false,
         },
         yaxis: { 
-            range: [0, height], autorange: false, 
-            scaleanchor: "x",
+            range: [0, height], 
+            autorange: false, 
+            scaleanchor: "x",  // Mantém a proporção da imagem
+            scaleratio: 1,
             showgrid: false,
             zeroline: false,
             visible: false,
@@ -509,22 +511,26 @@ async function graph_heatmap(images, df_trace, df_voice) {
             y: height,
             sizex: width,
             sizey: height,
-            sizing: "stretch",
+            sizing: "contain",  // Ajuste para "contain" ou "stretch" conforme necessário
             opacity: 1,
             layer: "below"
         }],
         sliders: [{
             steps: frames.map(f => ({
-                args: [[f.name], { frame: { duration: 0, redraw: true }, mode: "immediate" }],
+                args: [[f.name], { frame: { duration: 500, redraw: true }, mode: "afterall" }],
                 label: f.name,
                 method: "animate"
             })),
-            x: 0,
-            y: -0.07,
+            x: 0.12,  // Ajuste para a posição do slider na linha
+            len: 0.88,  // Ajuste o comprimento do slider
+            y: -0.03,  // Mesma altura dos botões
+            pad: { t: 0, b: 10 },
             font: { size: 12 },
             ticklen: 4,
-            currentvalue: { prefix: "Time(s):", visible: true }
+            currentvalue: { prefix: "Time(s):", visible: true, xanchor: "left", offset: 10 },
+            xanchor: "left",
         }],
+        
         updatemenus: [{
             buttons: [{
                 args: [null, { frame: { duration: 800, redraw: true }, fromcurrent: true, transition: { duration: 300, easing: "quadratic-in-out" } }],
@@ -536,17 +542,17 @@ async function graph_heatmap(images, df_trace, df_voice) {
                 method: "animate"
             }],
             direction: "left",
-            pad: { r: 0, t: 0, b: 0, l: 0 },
+            pad: { t: 0, b: 0, l: 20, r: 20 },
             showactive: false,
             type: "buttons",
-            x: 0.12,
-            xanchor: "right",
-            y: -0.02,
+            x: 0,
+            xanchor: "left",
+            y: -0.07,
             yanchor: "top",
-            bgcolor: "rgb(190, 190, 190)",
+            bgcolor: "rgba(190, 190, 190, 0.7)",
             font: { color: "rgb(0, 0, 0)" }
         }]
-    }
+    };
 
     var graphDiv = document.getElementById('resultPlot');
     

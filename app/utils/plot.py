@@ -75,9 +75,10 @@ def generate_trace_recording(df_trace):
     # Define ícones para cada tipo de interação (referência: https://plotly.com/python/marker-style/)
     type_icon = {
         "freeze": "hourglass",
-        "eye": "circle",
-        "click": "circle",
-        "move": "arrow",
+        "eye": "circle-open",
+        "click": "x",
+        "mousemove": "circle",
+        "wheel": "diamond-tall-dot",
         "keyboard": "hash",
     }
 
