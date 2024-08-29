@@ -1,4 +1,4 @@
-var plot; //variavel global para descobrir o plot usado no closePopupResult
+var plot; //variável global para descobrir o plot usado no closePopupResult
 var currentRequestId = null; // Identificador único para cada coleta
 
 function submitdata(data, url_dataview) {
@@ -22,18 +22,18 @@ function submitdata(data, url_dataview) {
                 var images = JSON.parse(result.images);
                 var df_trace = JSON.parse(result.trace);
                 var df_voice = JSON.parse(result.voice);
-                
+
                 //removendo o spinner e aparecendo o gráfico
                 removeSpinnerModal();
                 document.getElementById("modal-heatmap").style.display = "block";
 
                 // Call the graph_heatmap function and handle it asynchronously
-                graph_heatmap(images, df_trace, df_voice)                   
+                graph_heatmap(images, df_trace, df_voice)
                     .catch((error) => {
                         console.error("Error generating heatmap:", error);
                         $('#resultplot').html('Erro ao processar o heatmap');
                     });
-            } else if (result.plot === "recording") {               
+            } else if (result.plot === "recording") {
                 var images = JSON.parse(result.images);
                 var icons = JSON.parse(result.icons);
                 var df_trace = JSON.parse(result.trace);
@@ -64,7 +64,7 @@ function submitdata(data, url_dataview) {
             removeSpinnerModal();
             $('#resultplot').html('No results returned');
         }
-    }).fail(function (jqXHR, textStatus, errorThrown) { 
+    }).fail(function (jqXHR, textStatus, errorThrown) {
         // Trata erros de solicitação AJAX para coleta atual
         if (currentRequestId === requestId) {
             removeSpinnerModal();
@@ -78,14 +78,14 @@ function closePopupResult() {
     // Atualiza o identificador único para cancelar a coleta atual
     currentRequestId = null;
 
-    //verificando se o plot e recording ou heatmap para as devidas configuracoes de fechamento
-    if (plot === "recording"){
+    //verificando se o plot é recording ou heatmap para as devidas configurações de fechamento
+    if (plot === "recording") {
         clearRecordingElements();
-    } else if (plot === "heatmap"){
+    } else if (plot === "heatmap") {
         document.getElementById("modal-heatmap").style.display = "none";
     }
 
-    //verificando a existencia de um modelBody para evitar duplicações
+    //verificando a existência de um modalBody para evitar duplicações
     removeSpinnerModal();
 
     //criando novamente o modal-body do spinner para fechamento
@@ -94,13 +94,13 @@ function closePopupResult() {
     //limpando o plotly
     $('#resultPlot').html('');
 
-    //definimos um atraso de 1000 milissegundos (1 segundo) antes de remover o modal-body do spinner
+    //definimos um atraso de 500 milissegundos antes de remover o modal-body do spinner
     setTimeout(function () {
         modalBody.remove();
     }, 500);
-};
+}
 
-function showSpinnerModal(){
+function showSpinnerModal() {
     var modalBody = createSpinnerModalBody();
     var modalContent = document.querySelector('#modalContent');
     modalContent.appendChild(modalBody);
@@ -137,7 +137,7 @@ function botaoSites(result) {
         nameSites.appendChild(link);
 
         // Atribui o evento de clique corretamente
-        link.addEventListener("click", handleClick(site));
+        link.addEventListener("click", handleClick(site, result));
 
         if (firstItem) {
             link.click();
@@ -146,7 +146,7 @@ function botaoSites(result) {
     }
 
     // Define a função de clique
-    function handleClick(key) {
+    function handleClick(key, result) {
         return function (event) {
             event.preventDefault(); // Evitar o comportamento padrão do link
             // Remove a classe "clicked" de todos os botões
@@ -154,14 +154,21 @@ function botaoSites(result) {
             buttons.forEach(function (button) {
                 button.classList.remove("clicked");
             });
-            // Mostra o conteúdo do ploty
-            $('#resultPlot').html(result[key]);
             // Adiciona a classe para alterar a cor de fundo quando o botão é clicado
             this.classList.add("clicked");
+
+            // Atualiza o gráfico Plotly sem destruir o elemento
+            var plotDiv = document.getElementById('resultPlot');
+            var plotData = result[key].data;  // Supondo que `result[key]` contenha os dados e layout do gráfico
+            var plotLayout = result[key].layout;
+
+            Plotly.react(plotDiv, plotData, plotLayout)
+                .catch((error) => {
+                    console.error("Plotly error:", error);
+                });
         };
     }
 }
-
 
 // cria o elemento modal-body do spinner
 function createSpinnerModalBody() {
@@ -198,9 +205,9 @@ function createSpinnerModalBody() {
 
     // Retorna o modal-body para ser usado posteriormente
     return modalBody;
-};
+}
 
-function graph_recording(full_ims, type_icon, df_trace) {
+async function graph_recording(full_ims, type_icon, df_trace) {
     var dict_site = {}; // Objeto para armazenar os gráficos gerados para cada site
 
     // Cria uma lista de promessas para processar cada site
@@ -254,10 +261,10 @@ function graph_recording(full_ims, type_icon, df_trace) {
                             mode: mode,
                             name: type,
                             text: text,
-                            hovertemplate: `Interaction: ${type}<br>Site: ${site}<br>%{text}<br>X: %{x}<br>Y: %{y}</br>`,
+                            hovertemplate: `Interaction: '${type}<br>Site: ${site}<br>%{text}<br>X: %{x}<br>Y: %{y}</br>'`,
                             marker: {
                                 symbol: type_icon[type],
-                                size: (type !== 'click' && type !== 'freeze' && type !== 'wheel') ? 20 : 40,
+                                size: (type !== 'click' && type !== 'freeze' && type !== 'wheel') ? 8 : 16,
                                 angleref: 'previous'
                             }
                         });
@@ -279,7 +286,8 @@ function graph_recording(full_ims, type_icon, df_trace) {
                         showgrid: false, // Remover linhas de grade
                         zeroline: false, // Remover linha zero
                         visible: false,
-                        scaleanchor: 'x'
+                        scaleanchor: 'x',
+                        scaleratio: 1
                     },
                     legend: {
                         orientation: 'h',
@@ -290,13 +298,13 @@ function graph_recording(full_ims, type_icon, df_trace) {
                         font: { color: 'white', size: 18 }
                     },
                     images: [{
-                        source: img.src, // Usa a fonte da imagem carregada
-                        xref: 'paper',
-                        yref: 'paper',
+                        source: img.src,
+                        xref: 'x',
+                        yref: 'y',
                         x: 0,
-                        y: 1,
-                        sizex: 1,
-                        sizey: 1,
+                        y: 0, // Colocando no topo do eixo Y
+                        sizex: width,
+                        sizey: height,
                         sizing: 'stretch',
                         opacity: 1,
                         layer: 'below'
@@ -310,11 +318,26 @@ function graph_recording(full_ims, type_icon, df_trace) {
 
                 // Cria um elemento div e plota o gráfico
                 const plotDiv = document.getElementById('resultPlot');
-                Plotly.newPlot(plotDiv, traces, layout);
-                const containerWidth = plotDiv.clientWidth;
-                Plotly.relayout(plotDiv, {height: height*0.88, width: containerWidth*0.88});
-                dict_site[site] = plotDiv.outerHTML; // Armazena o HTML do gráfico no objeto dict_site
-                resolve(); // Resolve a promessa para este site
+                Plotly.newPlot(plotDiv, traces, layout).then(() => {
+                    const containerWidth = plotDiv.clientWidth;
+                    Plotly.relayout(plotDiv, {
+                        autosize: true,
+                        height: height * 0.88, 
+                        width: containerWidth * 0.88,
+                        margin: { l: 0, r: 0, t: 0, b: 0 },
+                        'yaxis.scaleanchor': 'x',
+                        'yaxis.scaleratio': 1,
+                        'yaxis.range': [height, 0] 
+                    });
+                    dict_site[site] = {
+                        data: traces,
+                        layout: layout
+                    };
+                    resolve(); // Agora, resolve é chamado após a plotagem completa
+                }).catch((error) => {
+                    console.error("Plotly error:", error);
+                    reject(error); // Rejeita a promessa se houver um erro na plotagem
+                });
             };
 
             img.onerror = reject; // Rejeita a promessa se houver um erro ao carregar a imagem
@@ -336,7 +359,7 @@ function gaussianKernel(x, y, sigma) {
     for (let i = -halfSize; i <= halfSize; i++) {
         kernel[i + halfSize] = [];
         for (let j = -halfSize; j <= halfSize; j++) {
-            kernel[i + halfSize][j + halfSize] = Math.exp(-0.5 * (i**2 + j**2) / (sigma**2));
+            kernel[i + halfSize][j + halfSize] = Math.exp(-0.5 * (i ** 2 + j ** 2) / (sigma ** 2));
         }
     }
 
@@ -488,15 +511,15 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
             pad: 0
         },
         xaxis: {
-            range: [0, width], 
+            range: [0, width],
             autorange: false,
             showgrid: false,
             zeroline: false,
             visible: false,
         },
-        yaxis: { 
-            range: [0, height], 
-            autorange: false, 
+        yaxis: {
+            range: [0, height],
+            autorange: false,
             scaleanchor: "x",  // Mantém a proporção da imagem
             scaleratio: 1,
             showgrid: false,
@@ -530,7 +553,7 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
             currentvalue: { prefix: "Time(s):", visible: true, xanchor: "left", offset: 10 },
             xanchor: "left",
         }],
-        
+
         updatemenus: [{
             buttons: [{
                 args: [null, { frame: { duration: 800, redraw: true }, fromcurrent: true, transition: { duration: 300, easing: "quadratic-in-out" } }],
@@ -555,7 +578,7 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
     };
 
     var graphDiv = document.getElementById('resultPlot');
-    
+
     // Inicie a plotagem com os dados do primeiro frame
     const initialFrame = frames[0];
     Plotly.newPlot(graphDiv, initialFrame.data, layout, { showlink: false });
