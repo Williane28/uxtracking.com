@@ -31,7 +31,7 @@ def index_post():
             app.db,
             collection_name,
             dataid,
-            ["eye", "mouse", "keyboard", "freeze", "click", "wheel", "move"],
+            ["eye", "keyboard", "freeze", "click", "wheel", "mousemove"],
         )
         voice_df = userdata2frame(app.db, collection_name, dataid, "voice")
         face_df = userdata2frame(app.db, collection_name, dataid, "face")

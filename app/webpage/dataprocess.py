@@ -127,12 +127,11 @@ def datafilter_post(username, metadata):
                         date,
                         [
                             "eye",
-                            "mouse",
                             "keyboard",
                             "freeze",
                             "click",
                             "wheel",
-                            "move",
+                            "mousemove",
                         ],
                     )
 
@@ -415,7 +414,7 @@ async def dataview_post(username, plot):
             app.db,
             collection_name,
             dir,
-            ["eye", "mouse", "keyboard", "freeze", "click", "wheel", "move"],
+            ["eye", "keyboard", "freeze", "click", "wheel", "mousemove"],
         )
         df_audio = userdata2frame(app.db, collection_name, dir, "voice")
 
@@ -427,7 +426,6 @@ async def dataview_post(username, plot):
                 try:
                     file_data = app.fs.get(im_id).read()
                     img = Image.open(io.BytesIO(file_data))
-                    img = img.resize((480, 270), Image.Resampling.LANCZOS)
                     buffered = io.BytesIO()
                     img.save(buffered, format="PNG", optimize=True)
                     img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
@@ -468,7 +466,6 @@ async def dataview_post(username, plot):
 
             async def transform_b64(key, img):
                 try:
-                    img = img.resize((480, 270), Image.Resampling.LANCZOS)
                     buffered = io.BytesIO()
                     img.save(buffered, format="PNG", optimize=True)
                     img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
