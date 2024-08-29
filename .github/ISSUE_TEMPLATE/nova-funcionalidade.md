@@ -1,6 +1,6 @@
 ---
 name: Nova Funcionalidade
-about: Suggest an idea for this project
+about: Sugerir uma nova funcionalidade ou modificar uma existente
 title: Feature
 labels: ''
 assignees: ''
