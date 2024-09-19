@@ -371,22 +371,28 @@ function applyGaussianKernelToMatrix(matrix, kernel, x, y) {
     const size = kernel.length;
     const halfSize = Math.floor(size / 2);
 
+    //console.log(`Aplicado o kernel em (x: ${x}, y: ${y})`);
+
     for (let i = -halfSize; i <= halfSize; i++) {
         for (let j = -halfSize; j <= halfSize; j++) {
             const xi = x + i;
-            const yj = y + j;
+            const yj = y + j; 
             if (xi >= 0 && xi < matrix.length && yj >= 0 && yj < matrix[0].length) {
                 matrix[xi][yj] += kernel[i + halfSize][j + halfSize];
             }
         }
-    }
+    }   
 }
 
 async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
+
+    //pega uma imagem base, no caso a primeira
     const firstImageKey = Object.keys(images)[0];
     const firstImageBase64 = images[firstImageKey];
 
     const img = new Image();
+
+    //permite renderizar uma imagem por meio de uma string, sem a necessidade de um arquivo externo
     img.src = firstImageBase64;
 
     await new Promise((resolve, reject) => {
@@ -394,9 +400,9 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
         img.onerror = reject;
     });
 
+    //tira a largura e altura da imagem base
     const width = img.width;
     const height = img.height;
-    console.log(width, height);
 
     const frames = [];
     const colorscale = [
@@ -409,21 +415,34 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
         [1, "rgba(255, 1, 0, 1)"]
     ];
 
+    //identifica o maior valor do time
     const maxTime = Math.max(...df_trace.map(row => row.time));
-    for (let time = 0; time <= maxTime; time++) {
+    for (let time = 0; time <= maxTime; time++) { 
+
+        //agrupa os dados para cada time
         const filtered_df = df_trace.filter(row => row.time == time);
+    
+        //pega as imagens de cada time
         const uniqueImages = [...new Set(filtered_df.map(row => row.image))];
 
+        //inteirar por todas as imagens do time
         for (const image of uniqueImages) {
-            const plot_df = filtered_df.filter(row => row.image == image);
 
-            const densityMatrix = new Array(width).fill().map(() => new Array(height).fill(0));
+            const plot_df = filtered_df.filter(row => row.image == image);
+           
+            //cria uma matriz de 0 com a mesma largura e coluna da imagem
+            const densityMatrix = Array.from({ length: height }, () => Array(width).fill(0));
+
+            //cria um krnel gaussiano para cada ponto da matriz
             const kernel = gaussianKernel(0, 0, sigma);
 
             for (const point of plot_df) {
+
+                //converte as coordenadas para inteiros
                 const x = Math.floor(parseFloat(point.x));
                 const y = Math.floor(Math.abs(parseFloat(point.y) - parseFloat(point.scroll)));
-
+                
+                //aplicar o filtro sobre as coordenadas
                 if (!isNaN(x) && !isNaN(y)) {
                     applyGaussianKernelToMatrix(densityMatrix, kernel, x, y);
                 }
@@ -441,7 +460,7 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
                     }],
                     name: `${time}`,
                     layout: {
-                        images: [{
+                        images: [{ //imagens por frame
                             source: images[image],
                             xref: "x",
                             yref: "y",
@@ -472,7 +491,7 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
                         }]
                     }
                 });
-            } else {
+            } else { // se não tem audio tira as anotações
                 frames.push({
                     data: [{
                         z: densityMatrix,
@@ -502,8 +521,8 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
     }
 
     const layout = {
-        autosize: true,  // Permite que o gráfico se ajuste automaticamente ao contêiner
-        margin: {  // Remover margens para permitir que a imagem se expanda completamente
+        autosize: true, 
+        margin: {  
             l: 0,
             r: 0,
             t: 40,
@@ -519,14 +538,13 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
         },
         yaxis: {
             range: [0, height],
-            autorange: false,
             scaleanchor: "x",  // Mantém a proporção da imagem
             scaleratio: 1,
             showgrid: false,
             zeroline: false,
             visible: false,
         },
-        images: [{
+        images: [{ //exibir uma imagem inicial
             source: firstImageBase64,
             xref: "x",
             yref: "y",
@@ -534,13 +552,14 @@ async function graph_heatmap(images, df_trace, df_voice, sigma = 60) {
             y: height,
             sizex: width,
             sizey: height,
-            sizing: "contain",  // Ajuste para "contain" ou "stretch" conforme necessário
+            sizing: "contain",  
             opacity: 1,
             layer: "below"
         }],
+
         sliders: [{
             steps: frames.map(f => ({
-                args: [[f.name], { frame: { duration: 500, redraw: true }, mode: "afterall" }],
+                args: [[f.name], { frame: { duration: 100, redraw: true }, mode: "animate" }],
                 label: f.name,
                 method: "animate"
             })),

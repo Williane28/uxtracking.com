@@ -410,17 +410,22 @@ async def dataview_post(username, plot):
         collection_name = f"data_{userfound['_id']}"
         dir = request.form["dir"]
 
-        df_trace = userdata2frame(
-            app.db,
-            collection_name,
-            dir,
-            ["eye", "keyboard", "freeze", "click", "wheel", "mousemove"],
-        )
-        df_audio = userdata2frame(app.db, collection_name, dir, "voice")
-
         if plot == "heatmap":
             results = {}
             full_base64 = {}
+
+            df_trace = userdata2frame(
+                app.db,
+                collection_name,
+                dir,
+                ["click", "wheel", "mousemove"],
+            ) 
+            
+            df_audio = userdata2frame(app.db, collection_name, dir, "voice")
+
+            # Filtra os DataFrames para diminuir o tamanho do JSON enviado
+            filtered_df_trace = df_trace[["time", "type", "x", "y", "image", "scroll"]].copy()
+            filtered_df_voice = df_audio[["text", "time", "image"]].copy()
 
             def process_image(im_id):
                 try:
@@ -443,10 +448,6 @@ async def dataview_post(username, plot):
             for im_id, img_base64 in results_img:
                 full_base64[im_id] = img_base64
 
-            # Filtra os DataFrames para diminuir o tamanho do JSON enviado
-            filtered_df_trace = df_trace[["time", "x", "y", "image", "scroll"]].copy()
-            filtered_df_voice = df_audio[["text", "time", "image"]].copy()
-
             # Remove caracteres não UTF-8 dos DataFrames
             filtered_df_trace = remove_non_utf8(filtered_df_trace)
             filtered_df_voice = remove_non_utf8(filtered_df_voice)
@@ -461,6 +462,13 @@ async def dataview_post(username, plot):
         elif plot == "recording":
             results = {}
             full_base64 = {}
+
+            df_trace = userdata2frame(
+                app.db,
+                collection_name,
+                dir,
+                ["eye", "keyboard", "freeze", "click", "wheel", "mousemove"],
+            )
 
             full_ims, type_icon = generate_trace_recording(df_trace)
 
